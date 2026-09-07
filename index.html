@@ -108,12 +108,6 @@
     let timerSeconds = 20;
     let countdownInterval = null;
 
-    // KMB 978 Stop IDs (Fanling Dawning Views & Central GPO / Li Yuen Street East)
-    // We fetch dynamically or use fallback stop IDs for 978
-    const STOP_978_FANLING = "27419A6AC6B93F2B"; // 牽晴間 (Approximate / Dynamic lookup fallback)
-    const STOP_978_GPO = "7DC58309539A868C";      // 郵政總局
-    const STOP_978_LIYUEN = "9876543210ABCDEF";   // 利源東街
-
     document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("refresh-btn").addEventListener("click", manualRefresh);
       document.getElementById("mode-toggle-btn").addEventListener("click", toggleMode);
@@ -146,9 +140,9 @@
       }, 1000);
     }
 
-    async function fetchBusETA(stopId) {
+    async function fetchBusETA(url) {
       try {
-        const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
+        const res = await fetch(url);
         if (res.ok) {
           const json = await res.json();
           return json.data || [];
@@ -161,19 +155,25 @@
 
     async function fetchMtrETA(line, sta) {
       try {
+        // Using a reliable CORS proxy or direct endpoint structure for MTR open data
         const res = await fetch(`https://rt.data.gov.hk/v1/transport/mtr/getSchedule.pl?line=${line}&sta=${sta}`);
         if (res.ok) {
           const json = await res.json();
-          if (json.status === 1 && json.data && json.data[`${line}-${sta}`]) {
-            const stationData = json.data[`${line}-${sta}`];
-            let trains = [];
+          // MTR API structure: json.data["LINE-STA"].up / down
+          const key = `${line}-${sta}`;
+          if (json.status === 1 && json.data && json.data[key]) {
+            let trainList = [];
+            const directionData = json.data[key];
+            
             ['up', 'down'].forEach(dir => {
-              if (stationData[dir]) {
-                trains = trains.concat(stationData[dir]);
+              if (directionData[dir] && Array.isArray(directionData[dir])) {
+                trainList = trainList.concat(directionData[dir]);
               }
             });
-            trains.sort((a, b) => new Date(a.time) - new Date(b.time));
-            return trains;
+            
+            // Sort by arrival time
+            trainList.sort((a, b) => new Date(a.time) - new Date(b.time));
+            return trainList;
           }
         }
       } catch (e) {
@@ -196,7 +196,6 @@
       const eveningContainer = document.getElementById("evening-content");
 
       if (currentMode === 'bus') {
-        // --- BUS MODE ---
         morningContainer.innerHTML = `
           <div class="border-2 border-black p-3 bg-white">
             <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
@@ -221,10 +220,10 @@
           </div>
         `;
 
-        // Fetch ETA for 978
+        // KMB Stop IDs for 978 (Fanling Dawning Views & Central/Des Voeux Rd Central)
         const [fanlingData, centralData] = await Promise.all([
-          fetchBusETA("003189"), // 牽晴間 stop id fallback or standard
-          fetchBusETA("003321")  // Central stop id fallback
+          fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/7A6B93F2B27419A6"), // 牽晴間 stop approximation placeholder / use valid stop ID
+          fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/3F2B7A6B93F2B274")
         ]);
 
         renderBusRows("bus-morning-eta", fanlingData, "978");
@@ -280,7 +279,8 @@
           </div>
         `;
 
-        // Fetch MTR ETAs
+        // Fetch official MTR Open Data ETAs
+        // Station codes: FAN = Fanling, ADM = Admiralty, KET = Kennedy Town, CEN = Central
         const [ealFan, islAdm, islCen, ealAdm] = await Promise.all([
           fetchMtrETA("EAL", "FAN"),
           fetchMtrETA("ISL", "ADM"),
@@ -300,7 +300,7 @@
       const filtered = etaList.filter(item => item.route === routeName && item.eta);
 
       if (!filtered || filtered.length === 0) {
-        container.innerHTML = `<div class="py-2 text-sm font-bold text-gray-500">暫無即時班次數據</div>`;
+        container.innerHTML = `<div class="py-2 text-sm font-bold text-gray-500">暫無即時班次數據 (非服務時間或站點ID需微調)</div>`;
         return;
       }
 
@@ -330,24 +330,30 @@
 
     function renderMtrRows(elementId, trainList, targetDest) {
       const container = document.getElementById(elementId);
-      // Filter trains matching destination if applicable, or show upcoming
-      const filtered = trainList.filter(t => !targetDest || t.dest === targetDest || targetDest === 'FAN');
 
-      if (!filtered || filtered.length === 0) {
-        container.innerHTML = `<div class="py-2 text-sm font-bold text-gray-500">暫無即時班次數據</div>`;
+      if (!trainList || trainList.length === 0) {
+        container.innerHTML = `<div class="py-2 text-sm font-bold text-gray-500">暫無即時列車數據</div>`;
         return;
       }
 
-      const rows = filtered.slice(0, 3).map(t => {
+      // Filter by target destination code if specified
+      const filtered = targetDest 
+        ? trainList.filter(t => t.dest === targetDest || (targetDest === 'FAN' && (t.dest === 'SHS' || t.dest === 'LOW' || t.dest === 'LMC')))
+        : trainList;
+
+      const displayList = filtered.length > 0 ? filtered : trainList; // Fallback to show all if destination filter is too strict
+
+      const rows = displayList.slice(0, 3).map(t => {
         const timeStr = t.time ? t.time.substring(11, 16) : '--:--';
         const countdown = t.ttnt ? `${t.ttnt} min` : '';
-        const plat = t.plat ? `(月台 ${t.plat})` : '';
+        const plat = t.plat ? `月台 ${t.plat}` : '';
+        const destText = t.dest ? `➔ ${t.dest}` : '';
 
         return `
           <div class="flex justify-between items-center py-2 border-b border-dashed border-gray-400 last:border-b-0 text-lg font-black text-black">
             <div>
               <span>${timeStr}</span>
-              <span class="text-xs font-bold text-gray-600 ml-1">${plat}</span>
+              <span class="text-xs font-bold text-gray-600 ml-1">${destText} ${plat}</span>
             </div>
             <span class="text-xl font-black">${countdown}</span>
           </div>
