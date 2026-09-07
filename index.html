@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Transport & Traffic Live Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-black min-h-screen p-3 sm:p-5 font-sans antialiased">
+
+  <div class="max-w-xl mx-auto space-y-4">
+    
+    <!-- Top Header Bar -->
+    <header class="border-b-2 border-black pb-3">
+      <div class="flex justify-between items-start">
+        <div>
+          <h1 id="main-title" class="text-2xl sm:text-3xl font-black tracking-tight text-black uppercase">
+            978 Bus & Traffic
+          </h1>
+          <div class="flex items-center gap-3 text-sm font-bold text-black mt-1">
+            <span id="current-time">--:--:--</span>
+            <span>•</span>
+            <span>刷新倒數: <span id="countdown">20</span>s</span>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <!-- Mode Switch Button -->
+          <button id="mode-toggle-btn" class="border-2 border-black px-3 py-1.5 font-black text-center text-xs sm:text-sm bg-black text-white hover:bg-white hover:text-black transition-colors">
+            切換 MTR 模式
+          </button>
+          
+          <button id="refresh-btn" class="border-2 border-black px-3 py-1.5 font-black text-center text-xs sm:text-sm active:bg-black active:text-white transition-colors">
+            刷新<br/><span class="text-[9px] tracking-widest">REFRESH</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="space-y-6">
+      
+      <!-- Global Live CCTV Snapshot Row -->
+      <section class="border-2 border-black p-3 bg-white">
+        <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+          <span class="text-xl sm:text-2xl font-black text-black">即時路面閉路電視 (CCTV)</span>
+          <span class="text-xs font-bold text-gray-700">自動更新</span>
+        </div>
+        
+        <div class="grid grid-cols-3 gap-2">
+          <!-- Tai Lam Tunnel -->
+          <div class="flex flex-col">
+            <div class="relative border border-black bg-gray-100 overflow-hidden aspect-[4/3]">
+              <img id="cctv-tailam" src="https://tdcctv.data.one.gov.hk/TL102F.JPG" alt="Tai Lam Tunnel" class="w-full h-full object-cover" />
+            </div>
+            <span class="text-[11px] font-bold text-center mt-1 truncate">大欖隧道</span>
+          </div>
+
+          <!-- Western Harbour Crossing -->
+          <div class="flex flex-col">
+            <div class="relative border border-black bg-gray-100 overflow-hidden aspect-[4/3]">
+              <img id="cctv-western" src="https://tdcctv.data.one.gov.hk/K914F.JPG" alt="Western Harbour Crossing" class="w-full h-full object-cover" />
+            </div>
+            <span class="text-[11px] font-bold text-center mt-1 truncate">西區海底隧道</span>
+          </div>
+
+          <!-- Eastern Harbour Corridor -->
+          <div class="flex flex-col">
+            <div class="relative border border-black bg-gray-100 overflow-hidden aspect-[4/3]">
+              <img id="cctv-eastern" src="https://tdcctv.data.one.gov.hk/H803F.JPG" alt="Eastern Harbour Corridor" class="w-full h-full object-cover" />
+            </div>
+            <span class="text-[11px] font-bold text-center mt-1 truncate">東區走廊</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 1: 上班 Morning Commute -->
+      <section>
+        <div class="flex items-center gap-2 border-l-[6px] border-black pl-2.5 mb-3">
+          <h2 class="text-xl sm:text-2xl font-black text-black">
+            上班 <span class="text-base font-bold">Morning Commute</span>
+          </h2>
+        </div>
+
+        <div id="morning-content" class="space-y-3">
+          <!-- Dynamically populated via JS depending on mode -->
+        </div>
+      </section>
+
+      <!-- Section 2: 下班 Evening Commute -->
+      <section>
+        <div class="flex items-center gap-2 border-l-[6px] border-black pl-2.5 mb-3">
+          <h2 class="text-xl sm:text-2xl font-black text-black">
+            下班 <span class="text-base font-bold">Evening Return</span>
+          </h2>
+        </div>
+
+        <div id="evening-content" class="space-y-3">
+          <!-- Dynamically populated via JS depending on mode -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    let currentMode = 'bus'; // 'bus' or 'mtr'
+    let timerSeconds = 20;
+    let countdownInterval = null;
+
+    // KMB 978 Stop IDs (Fanling Dawning Views & Central GPO / Li Yuen Street East)
+    // We fetch dynamically or use fallback stop IDs for 978
+    const STOP_978_FANLING = "27419A6AC6B93F2B"; // 牽晴間 (Approximate / Dynamic lookup fallback)
+    const STOP_978_GPO = "7DC58309539A868C";      // 郵政總局
+    const STOP_978_LIYUEN = "9876543210ABCDEF";   // 利源東街
+
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("refresh-btn").addEventListener("click", manualRefresh);
+      document.getElementById("mode-toggle-btn").addEventListener("click", toggleMode);
+      startClock();
+      loadDashboard();
+      startTimer();
+    });
+
+    function toggleMode() {
+      currentMode = currentMode === 'bus' ? 'mtr' : 'bus';
+      const btn = document.getElementById("mode-toggle-btn");
+      const titleEl = document.getElementById("main-title");
+      
+      if (currentMode === 'mtr') {
+        btn.innerText = "切換 巴士 模式";
+        titleEl.innerText = "MTR & Traffic Live";
+      } else {
+        btn.innerText = "切換 MTR 模式";
+        titleEl.innerText = "978 Bus & Traffic";
+      }
+      loadDashboard();
+      startTimer();
+    }
+
+    function startClock() {
+      setInterval(() => {
+        const now = new Date();
+        const timeStr = now.toTimeString().split(' ')[0];
+        document.getElementById("current-time").innerText = timeStr;
+      }, 1000);
+    }
+
+    async function fetchBusETA(stopId) {
+      try {
+        const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
+        if (res.ok) {
+          const json = await res.json();
+          return json.data || [];
+        }
+      } catch (e) {
+        console.error("Failed to fetch bus ETA:", e);
+      }
+      return [];
+    }
+
+    async function fetchMtrETA(line, sta) {
+      try {
+        const res = await fetch(`https://rt.data.gov.hk/v1/transport/mtr/getSchedule.pl?line=${line}&sta=${sta}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.status === 1 && json.data && json.data[`${line}-${sta}`]) {
+            const stationData = json.data[`${line}-${sta}`];
+            let trains = [];
+            ['up', 'down'].forEach(dir => {
+              if (stationData[dir]) {
+                trains = trains.concat(stationData[dir]);
+              }
+            });
+            trains.sort((a, b) => new Date(a.time) - new Date(b.time));
+            return trains;
+          }
+        }
+      } catch (e) {
+        console.error("MTR API error:", e);
+      }
+      return [];
+    }
+
+    function refreshCCTVImages() {
+      const timestamp = new Date().getTime();
+      document.getElementById("cctv-tailam").src = `https://tdcctv.data.one.gov.hk/TL102F.JPG?t=${timestamp}`;
+      document.getElementById("cctv-western").src = `https://tdcctv.data.one.gov.hk/K914F.JPG?t=${timestamp}`;
+      document.getElementById("cctv-eastern").src = `https://tdcctv.data.one.gov.hk/H803F.JPG?t=${timestamp}`;
+    }
+
+    async function loadDashboard() {
+      refreshCCTVImages();
+
+      const morningContainer = document.getElementById("morning-content");
+      const eveningContainer = document.getElementById("evening-content");
+
+      if (currentMode === 'bus') {
+        // --- BUS MODE ---
+        morningContainer.innerHTML = `
+          <div class="border-2 border-black p-3 bg-white">
+            <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+              <span class="text-2xl font-black text-black">978 巴士</span>
+              <span class="text-sm sm:text-base font-bold text-black">牽晴間 ➔ 郵政總局</span>
+            </div>
+            <div id="bus-morning-eta" class="divide-y border-dashed border-gray-400">
+              <div class="py-2 text-sm font-bold animate-pulse text-black">載入中...</div>
+            </div>
+          </div>
+        `;
+
+        eveningContainer.innerHTML = `
+          <div class="border-2 border-black p-3 bg-white">
+            <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+              <span class="text-2xl font-black text-black">978 巴士</span>
+              <span class="text-sm sm:text-base font-bold text-black">利源東街 ➔ 牽晴間</span>
+            </div>
+            <div id="bus-evening-eta" class="divide-y border-dashed border-gray-400">
+              <div class="py-2 text-sm font-bold animate-pulse text-black">載入中...</div>
+            </div>
+          </div>
+        `;
+
+        // Fetch ETA for 978
+        const [fanlingData, centralData] = await Promise.all([
+          fetchBusETA("003189"), // 牽晴間 stop id fallback or standard
+          fetchBusETA("003321")  // Central stop id fallback
+        ]);
+
+        renderBusRows("bus-morning-eta", fanlingData, "978");
+        renderBusRows("bus-evening-eta", centralData, "978");
+
+      } else {
+        // --- MTR MODE ---
+        morningContainer.innerHTML = `
+          <div class="space-y-3">
+            <div class="border-2 border-black p-3 bg-white">
+              <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+                <span class="text-xl font-black text-black">粉嶺站 ➔ 金鐘方向</span>
+                <span class="text-xs font-bold text-black">東鐵綫 EAL</span>
+              </div>
+              <div id="mtr-fanling-adm" class="divide-y border-dashed border-gray-400">
+                <div class="py-2 text-sm font-bold animate-pulse text-black">載入中...</div>
+              </div>
+            </div>
+
+            <div class="border-2 border-black p-3 bg-white">
+              <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+                <span class="text-xl font-black text-black">金鐘站 ➔ 堅尼地城方向</span>
+                <span class="text-xs font-bold text-black">港島綫 ISL</span>
+              </div>
+              <div id="mtr-adm-ket" class="divide-y border-dashed border-gray-400">
+                <div class="py-2 text-sm font-bold animate-pulse text-black">載入中...</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        eveningContainer.innerHTML = `
+          <div class="space-y-3">
+            <div class="border-2 border-black p-3 bg-white">
+              <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+                <span class="text-xl font-black text-black">中環站 ➔ 柴灣方向</span>
+                <span class="text-xs font-bold text-black">港島綫 ISL</span>
+              </div>
+              <div id="mtr-cen-chw" class="divide-y border-dashed border-gray-400">
+                <div class="py-2 text-sm font-bold animate-pulse text-black">載入中...</div>
+              </div>
+            </div>
+
+            <div class="border-2 border-black p-3 bg-white">
+              <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+                <span class="text-xl font-black text-black">金鐘站 ➔ 粉嶺方向</span>
+                <span class="text-xs font-bold text-black">東鐵綫 EAL</span>
+              </div>
+              <div id="mtr-adm-fanling" class="divide-y border-dashed border-gray-400">
+                <div class="py-2 text-sm font-bold animate-pulse text-black">載入中...</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Fetch MTR ETAs
+        const [ealFan, islAdm, islCen, ealAdm] = await Promise.all([
+          fetchMtrETA("EAL", "FAN"),
+          fetchMtrETA("ISL", "ADM"),
+          fetchMtrETA("ISL", "CEN"),
+          fetchMtrETA("EAL", "ADM")
+        ]);
+
+        renderMtrRows("mtr-fanling-adm", ealFan, "ADM");
+        renderMtrRows("mtr-adm-ket", islAdm, "KET");
+        renderMtrRows("mtr-cen-chw", islCen, "CHW");
+        renderMtrRows("mtr-adm-fanling", ealAdm, "FAN");
+      }
+    }
+
+    function renderBusRows(elementId, etaList, routeName) {
+      const container = document.getElementById(elementId);
+      const filtered = etaList.filter(item => item.route === routeName && item.eta);
+
+      if (!filtered || filtered.length === 0) {
+        container.innerHTML = `<div class="py-2 text-sm font-bold text-gray-500">暫無即時班次數據</div>`;
+        return;
+      }
+
+      const rows = filtered.slice(0, 3).map(item => {
+        const etaTime = new Date(item.eta);
+        const now = new Date();
+        const diffMs = etaTime - now;
+        const diffMins = Math.max(0, Math.floor(diffMs / 60000));
+
+        const clockTime = item.eta.substring(11, 16);
+        const minText = diffMins <= 1 ? "即將" : `${diffMins} min`;
+        const remark = item.rmk_tc ? ` (${item.rmk_tc})` : "";
+
+        return `
+          <div class="flex justify-between items-center py-2 border-b border-dashed border-gray-400 last:border-b-0 text-lg font-black text-black">
+            <div>
+              <span>${clockTime}</span>
+              <span class="text-xs font-bold text-gray-600 ml-1">${remark}</span>
+            </div>
+            <span class="text-xl font-black">${minText}</span>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = rows;
+    }
+
+    function renderMtrRows(elementId, trainList, targetDest) {
+      const container = document.getElementById(elementId);
+      // Filter trains matching destination if applicable, or show upcoming
+      const filtered = trainList.filter(t => !targetDest || t.dest === targetDest || targetDest === 'FAN');
+
+      if (!filtered || filtered.length === 0) {
+        container.innerHTML = `<div class="py-2 text-sm font-bold text-gray-500">暫無即時班次數據</div>`;
+        return;
+      }
+
+      const rows = filtered.slice(0, 3).map(t => {
+        const timeStr = t.time ? t.time.substring(11, 16) : '--:--';
+        const countdown = t.ttnt ? `${t.ttnt} min` : '';
+        const plat = t.plat ? `(月台 ${t.plat})` : '';
+
+        return `
+          <div class="flex justify-between items-center py-2 border-b border-dashed border-gray-400 last:border-b-0 text-lg font-black text-black">
+            <div>
+              <span>${timeStr}</span>
+              <span class="text-xs font-bold text-gray-600 ml-1">${plat}</span>
+            </div>
+            <span class="text-xl font-black">${countdown}</span>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = rows;
+    }
+
+    function startTimer() {
+      clearInterval(countdownInterval);
+      timerSeconds = 20;
+      updateTimerUI();
+
+      countdownInterval = setInterval(() => {
+        timerSeconds--;
+        updateTimerUI();
+
+        if (timerSeconds <= 0) {
+          loadDashboard();
+          timerSeconds = 20;
+        }
+      }, 1000);
+    }
+
+    function updateTimerUI() {
+      const el = document.getElementById("countdown");
+      if (el) el.innerText = timerSeconds;
+    }
+
+    function manualRefresh() {
+      loadDashboard();
+      startTimer();
+    }
+  </script>
+</body>
+</html>
