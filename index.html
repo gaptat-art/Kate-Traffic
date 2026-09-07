@@ -104,20 +104,22 @@
   </div>
 
   <script>
-    let currentMode = 'bus'; // 'bus' or 'mtr'
+    // Retrieve saved mode from localStorage, default to 'bus' if not found
+    let currentMode = localStorage.getItem('dashboardMode') || 'bus';
     let timerSeconds = 20;
     let countdownInterval = null;
 
     document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("refresh-btn").addEventListener("click", manualRefresh);
       document.getElementById("mode-toggle-btn").addEventListener("click", toggleMode);
+      
+      initModeUI();
       startClock();
       loadDashboard();
       startTimer();
     });
 
-    function toggleMode() {
-      currentMode = currentMode === 'bus' ? 'mtr' : 'bus';
+    function initModeUI() {
       const btn = document.getElementById("mode-toggle-btn");
       const titleEl = document.getElementById("main-title");
       
@@ -128,6 +130,14 @@
         btn.innerText = "切換 MTR 模式";
         titleEl.innerText = "978 Bus & Traffic";
       }
+    }
+
+    function toggleMode() {
+      currentMode = currentMode === 'bus' ? 'mtr' : 'bus';
+      // Save chosen mode to localStorage so it persists across refreshes
+      localStorage.setItem('dashboardMode', currentMode);
+      
+      initModeUI();
       loadDashboard();
       startTimer();
     }
@@ -163,7 +173,6 @@
             let trainList = [];
             const directionData = json.data[key];
             
-            // Fixed: MTR API uses uppercase "UP" and "DOWN" keys
             ['UP', 'DOWN'].forEach(dir => {
               if (directionData[dir] && Array.isArray(directionData[dir])) {
                 trainList = trainList.concat(directionData[dir]);
