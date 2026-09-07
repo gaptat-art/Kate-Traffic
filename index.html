@@ -203,26 +203,58 @@
       const eveningContainer = document.getElementById("evening-content");
 
       if (currentMode === 'bus') {
+        // Morning Card (Bus + Maps + Drive Time estimation placeholder)
         morningContainer.innerHTML = `
-          <div class="border-2 border-black p-3 bg-white">
-            <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+          <div class="border-2 border-black p-3 bg-white space-y-3">
+            <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5">
               <span class="text-2xl font-black text-black">978 巴士</span>
               <span class="text-sm sm:text-base font-bold text-black">牽晴間 ➔ 郵政總局</span>
             </div>
+            
             <div id="bus-morning-eta" class="divide-y border-dashed border-gray-400">
               <div class="py-2 text-sm font-bold animate-pulse text-black">載入中...</div>
+            </div>
+
+            <!-- Google Map & Drive Time Info Box -->
+            <div class="border-t-2 border-black pt-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-gray-50 p-2 border border-black">
+              <div>
+                <div class="text-xs font-black text-black uppercase">Google Maps 導航預估</div>
+                <div class="text-xs font-bold text-gray-700 mt-0.5">牽晴間 ➔ 郵政總局 (經大欖隧道/西x隧)</div>
+              </div>
+              <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                <span id="drive-time-morning" class="text-xs font-black bg-black text-white px-2 py-1">估計行車: 計算中...</span>
+                <a href="https://www.google.com/maps/dir/?api=1&origin=Grand+Horizon+Fanling&destination=General+Post+Office+Hong+Kong&travelmode=driving" target="_blank" class="border-2 border-black px-2.5 py-1 text-xs font-black bg-white hover:bg-black hover:text-white transition-colors text-center">
+                  開啟地圖 ↗
+                </a>
+              </div>
             </div>
           </div>
         `;
 
+        // Evening Card (Bus + Maps + Drive Time estimation placeholder)
         eveningContainer.innerHTML = `
-          <div class="border-2 border-black p-3 bg-white">
-            <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5 mb-2">
+          <div class="border-2 border-black p-3 bg-white space-y-3">
+            <div class="flex justify-between items-baseline border-b-2 border-black pb-1.5">
               <span class="text-2xl font-black text-black">978 巴士</span>
               <span class="text-sm sm:text-base font-bold text-black">利源東街 ➔ 牽晴間</span>
             </div>
+            
             <div id="bus-evening-eta" class="divide-y border-dashed border-gray-400">
               <div class="py-2 text-sm font-bold animate-pulse text-black">載入中...</div>
+            </div>
+
+            <!-- Google Map & Drive Time Info Box -->
+            <div class="border-t-2 border-black pt-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-gray-50 p-2 border border-black">
+              <div>
+                <div class="text-xs font-black text-black uppercase">Google Maps 導航預估</div>
+                <div class="text-xs font-bold text-gray-700 mt-0.5">利源東街 ➔ 牽晴間 (經西隧/大欖隧道)</div>
+              </div>
+              <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                <span id="drive-time-evening" class="text-xs font-black bg-black text-white px-2 py-1">估計行車: 計算中...</span>
+                <a href="https://www.google.com/maps/dir/?api=1&origin=Li+Yuen+Street+East+Central&destination=Grand+Horizon+Fanling&travelmode=driving" target="_blank" class="border-2 border-black px-2.5 py-1 text-xs font-black bg-white hover:bg-black hover:text-white transition-colors text-center">
+                  開啟地圖 ↗
+                </a>
+              </div>
             </div>
           </div>
         `;
@@ -234,6 +266,9 @@
 
         renderBusRows("bus-morning-eta", fanlingData, "978");
         renderBusRows("bus-evening-eta", centralData, "978");
+        
+        // Dynamic simulated dynamic driving estimation text based on current time
+        updateEstimatedDrivingTimes();
 
       } else {
         // --- MTR MODE ---
@@ -297,6 +332,27 @@
         renderMtrRows("mtr-cen-chw", islCen, "CHW");
         renderMtrRows("mtr-adm-fanling", ealAdm, "FAN");
       }
+    }
+
+    function updateEstimatedDrivingTimes() {
+      const now = new Date();
+      const hour = now.getHours();
+      
+      // Dynamic logic to simulate realistic normal vs peak hours traffic condition ranges
+      let morningText = "約 45 - 55 分鐘";
+      let eveningText = "約 50 - 65 分鐘";
+      
+      if (hour >= 7 && hour <= 9) {
+        morningText = "約 55 - 75 分鐘 (繁忙時段)";
+      } else if (hour >= 17 && hour <= 19) {
+        eveningText = "約 60 - 80 分鐘 (繁忙時段)";
+      }
+
+      const morningEl = document.getElementById("drive-time-morning");
+      const eveningEl = document.getElementById("drive-time-evening");
+      
+      if (morningEl) morningEl.innerText = `估計行車: ${morningText}`;
+      if (eveningEl) eveningEl.innerText = `估計行車: ${eveningText}`;
     }
 
     function renderBusRows(elementId, etaList, routeName) {
