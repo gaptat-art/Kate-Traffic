@@ -155,7 +155,6 @@
 
     async function fetchMtrETA(line, sta) {
       try {
-        // Fixed script extension from .pl to official .php endpoint
         const res = await fetch(`https://rt.data.gov.hk/v1/transport/mtr/getSchedule.php?line=${line}&sta=${sta}`);
         if (res.ok) {
           const json = await res.json();
@@ -164,7 +163,8 @@
             let trainList = [];
             const directionData = json.data[key];
             
-            ['up', 'down'].forEach(dir => {
+            // Fixed: MTR API uses uppercase "UP" and "DOWN" keys
+            ['UP', 'DOWN'].forEach(dir => {
               if (directionData[dir] && Array.isArray(directionData[dir])) {
                 trainList = trainList.concat(directionData[dir]);
               }
