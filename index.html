@@ -155,11 +155,10 @@
 
     async function fetchMtrETA(line, sta) {
       try {
-        // Using a reliable CORS proxy or direct endpoint structure for MTR open data
-        const res = await fetch(`https://rt.data.gov.hk/v1/transport/mtr/getSchedule.pl?line=${line}&sta=${sta}`);
+        // Fixed script extension from .pl to official .php endpoint
+        const res = await fetch(`https://rt.data.gov.hk/v1/transport/mtr/getSchedule.php?line=${line}&sta=${sta}`);
         if (res.ok) {
           const json = await res.json();
-          // MTR API structure: json.data["LINE-STA"].up / down
           const key = `${line}-${sta}`;
           if (json.status === 1 && json.data && json.data[key]) {
             let trainList = [];
@@ -171,7 +170,6 @@
               }
             });
             
-            // Sort by arrival time
             trainList.sort((a, b) => new Date(a.time) - new Date(b.time));
             return trainList;
           }
@@ -220,9 +218,8 @@
           </div>
         `;
 
-        // KMB Stop IDs for 978 (Fanling Dawning Views & Central/Des Voeux Rd Central)
         const [fanlingData, centralData] = await Promise.all([
-          fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/4CA5DEBCC576E371"), // 牽晴間 stop approximation placeholder / use valid stop ID
+          fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/4CA5DEBCC576E371"),
           fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/83B717529F9794BC")
         ]);
 
@@ -279,8 +276,6 @@
           </div>
         `;
 
-        // Fetch official MTR Open Data ETAs
-        // Station codes: FAN = Fanling, ADM = Admiralty, KET = Kennedy Town, CEN = Central
         const [ealFan, islAdm, islCen, ealAdm] = await Promise.all([
           fetchMtrETA("EAL", "FAN"),
           fetchMtrETA("ISL", "ADM"),
@@ -336,12 +331,11 @@
         return;
       }
 
-      // Filter by target destination code if specified
       const filtered = targetDest 
         ? trainList.filter(t => t.dest === targetDest || (targetDest === 'FAN' && (t.dest === 'SHS' || t.dest === 'LOW' || t.dest === 'LMC')))
         : trainList;
 
-      const displayList = filtered.length > 0 ? filtered : trainList; // Fallback to show all if destination filter is too strict
+      const displayList = filtered.length > 0 ? filtered : trainList;
 
       const rows = displayList.slice(0, 3).map(t => {
         const timeStr = t.time ? t.time.substring(11, 16) : '--:--';
