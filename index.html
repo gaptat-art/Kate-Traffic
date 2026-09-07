@@ -222,8 +222,8 @@
 
         // KMB Stop IDs for 978 (Fanling Dawning Views & Central/Des Voeux Rd Central)
         const [fanlingData, centralData] = await Promise.all([
-          fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/7A6B93F2B27419A6"), // 牽晴間 stop approximation placeholder / use valid stop ID
-          fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/3F2B7A6B93F2B274")
+          fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/4CA5DEBCC576E371"), // 牽晴間 stop approximation placeholder / use valid stop ID
+          fetchBusETA("https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/83B717529F9794BC")
         ]);
 
         renderBusRows("bus-morning-eta", fanlingData, "978");
